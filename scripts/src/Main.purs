@@ -51,33 +51,6 @@ getAllWordsByLen n = do
 filterWord :: String -> Boolean
 filterWord str = length str >= 3 && length str <= 5
 
-isReachable :: Set String -> String -> String -> Boolean
-isReachable dictionary wrd1 wrd2 =
-  length wrd1 == length wrd2 && canReach dictionary wrd1 wrd2
-
-canReach :: Set String -> String -> String -> Boolean
-canReach dictionary source target =
-  if source == target then true
-  else go [ source ] (Set.empty)
-  where
-  go :: Array String -> Set String -> Boolean
-  go wordsToCheck visited =
-    if elem target wordsToCheck then
-      true
-    else
-      case head wordsToCheck of
-        Nothing -> false
-        Just wrd ->
-          let
-            newSet = Set.insert wrd visited
-            possibilities = getAllPossibilities dictionary wrd
-            newWordsToCheck = removeDupes $ filter (\w -> not (Set.member w newSet)) possibilities <> (fromMaybe [] (tail wordsToCheck))
-          in
-            go (newWordsToCheck) newSet
-
-removeDupes :: Array String -> Array String
-removeDupes = Set.toUnfoldable <<< Set.fromFoldable
-
 getAllPossibilities :: Set String -> String -> Array String
 getAllPossibilities dictionary wrd =
   let
@@ -103,20 +76,6 @@ getRandomWord :: Array String -> Effect String
 getRandomWord dictionary = do
   idx <- randomNum (A.length dictionary - 1)
   pure $ fromMaybe "" (dictionary !! idx)
-
--- main :: Effect Unit
--- main = do
---   dict <- getAllWords
---   source <- getRandomWord (Set.toUnfoldable dict)
---   target <- getRandomWord (Set.toUnfoldable dict)
---   log $ "Source: " <> show source
---   log $ "Target: " <> show target
---   -- log $ "Can be played? " <> (show $ isReachable dict source target)
---   if length source /= length target then log "Words must be of same length"
---   else log $ "Paths: " <> show (getShortestPath dict source target)
-
--- getPath :: Set String -> String -> String -> Array String
--- getPath dictionary source target =
 
 enqueue :: forall a. a -> Array a -> Array a
 enqueue item queue = [ item ] <> queue
@@ -196,10 +155,10 @@ gameLoop :: GameState -> Aff Unit
 gameLoop state = do
   case state.gameStatus of
     Win player -> do
-      logA $ (show player) <> " wins!"
+      logAff $ (show player) <> " wins!"
       liftEffect $ exit
     Play player -> do
-      logA $ showPath state
+      logAff $ showPath state
       allowed <- pure $ rankByClosest (snd state.gameWords) $ (filter (\w -> not $ elem w state.playedWords)) $ getAllPossibilities state.dictionary state.lastPlayedWord
       when (null allowed) $ do
         gameLoop (state { gameStatus = Over "No more possible words can be played. Game ends without a winner!" })
@@ -207,16 +166,16 @@ gameLoop state = do
         User -> do
           input <- readLine "Enter your word (enter empty to forfeit)"
           when (trim input == "") $ do
-            logA "You forfeited the game."
+            logAff "You forfeited the game."
             gameLoop (state { gameStatus = Win Computer })
           when (elem input state.playedWords) $ do
-            logA $ "That's already played, friend. Try another."
+            logAff $ "That's already played, friend. Try another."
             gameLoop state
           when (not (isValidWord state.dictionary input)) do
-            logA "Hey, that's not a valid word in my dictionary. Try again."
+            logAff "Hey, that's not a valid word in my dictionary. Try again."
             gameLoop state
           when (not $ elem input allowed) $ do
-            logA $ "Only one letter change at a time, friend. Try again."
+            logAff $ "Only one letter change at a time, friend. Try again."
             gameLoop state
           gameLoop
             ( state
@@ -230,7 +189,7 @@ gameLoop state = do
             )
         Computer -> do
           if (elem (snd state.gameWords) allowed) then do
-            logA $ "\nComputer plays: " <> (snd state.gameWords) <> " and wins!"
+            logAff $ "\nComputer plays: " <> (snd state.gameWords) <> " and wins!"
             liftEffect $ exit
           else
             let
@@ -244,10 +203,10 @@ gameLoop state = do
             in
               case nextBestWord of
                 Nothing -> do
-                  logA $ "Computer cant think of a word to play."
+                  logAff $ "Computer cant think of a word to play."
                   gameLoop (state { gameStatus = Win User })
                 Just p -> do
-                  logA $ "\nComputer plays: " <> p
+                  logAff $ "\nComputer plays: " <> p
                   gameLoop
                     ( state
                         { gameStatus =
@@ -258,7 +217,7 @@ gameLoop state = do
                         }
                     )
     Over reason -> do
-      logA $ reason
+      logAff $ reason
       liftEffect $ exit
 
 showPath :: GameState -> String
@@ -291,13 +250,10 @@ startGame = do
   dict <- liftEffect $ getAllWordsByLen 4
   source <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
   target <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
-  -- let
-  --   source = "done"
-  --   target = "coin"
   pure $ gameStateInit { dictionary = dict, gameWords = Tuple source target, lastPlayedWord = source, playedWords = [ source ] }
 
-logA :: String -> Aff Unit
-logA = liftEffect <<< log
+logAff :: String -> Aff Unit
+logAff = liftEffect <<< log
 
 rankByClosest :: String -> Array String -> Array String
 rankByClosest target wrds = sortBy (\a b -> compare (scoreWords a target) (scoreWords b target)) wrds
