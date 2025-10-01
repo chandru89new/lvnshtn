@@ -196,9 +196,7 @@ gameLoop :: GameState -> Aff Unit
 gameLoop state = do
   case state.gameStatus of
     Win player -> do
-      case player of
-        User -> logA "User wins!"
-        Computer -> logA "Computer wins!"
+      logA $ (show player) <> " wins!"
       liftEffect $ exit
     Play player -> do
       logA $ showPath state
@@ -291,11 +289,11 @@ readLine str = do
 startGame :: Aff GameState
 startGame = do
   dict <- liftEffect $ getAllWordsByLen 4
-  -- source <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
-  -- target <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
-  let
-    source = "doge"
-    target = "coin"
+  source <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
+  target <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
+  -- let
+  --   source = "done"
+  --   target = "coin"
   pure $ gameStateInit { dictionary = dict, gameWords = Tuple source target, lastPlayedWord = source, playedWords = [ source ] }
 
 logA :: String -> Aff Unit
