@@ -9,5 +9,8 @@
   },
   "bin": {
     "wordladder": "./dist/wordladder"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }
