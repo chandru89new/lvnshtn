@@ -149,27 +149,27 @@ gameLoop :: GameState -> Aff Unit
 gameLoop state = do
   case state.gameStatus of
     Win player -> do
-      logAff $ (show player) <> " wins!"
+      logAff $ (show player) <> " wins!\n"
       liftEffect $ exit
     Play player -> do
       logAff $ showPath state
       allowed <- pure $ rankByClosest (snd state.gameWords) $ (filter (\w -> not $ elem w state.playedWords)) $ getAllPossibilities state.dictionary state.lastPlayedWord
-      when (null allowed) $ do
-        gameLoop (state { gameStatus = Over "No more possible words can be played. Game ends without a winner!" })
+      -- when (null allowed) $ do
+      --   gameLoop (state { gameStatus = Over "No more possible words can be played. Game ends without a winner!" })
       case player of
         User -> do
           input <- readLine "Enter your word (enter empty to forfeit)"
           when (trim input == "") $ do
-            logAff "You forfeited the game."
+            logAff "You forfeited the game.\n"
             gameLoop (state { gameStatus = Win Computer })
           when (elem input state.playedWords) $ do
-            logAff $ "That's already played, friend. Try another."
+            logAff $ "That's already played, friend. Try another.\n"
             gameLoop state
           when (not (isValidWord state.dictionary input)) do
-            logAff "Hey, that's not a valid word in my dictionary. Try again."
+            logAff "Hey, that's not a valid word in my dictionary. Try again.\n"
             gameLoop state
           when (not $ elem input allowed) $ do
-            logAff $ "Only one letter change at a time, friend. Try again."
+            logAff $ "Only one letter change at a time, friend. Try again.\n"
             gameLoop state
           gameLoop
             ( state
@@ -183,7 +183,7 @@ gameLoop state = do
             )
         Computer -> do
           if (elem (snd state.gameWords) allowed) then do
-            logAff $ "\nComputer plays: " <> (snd state.gameWords) <> " and wins!"
+            logAff $ "Computer plays: " <> (snd state.gameWords) <> " and wins!\n"
             liftEffect $ exit
           else
             let
@@ -198,10 +198,10 @@ gameLoop state = do
             in
               case nextBestWord of
                 Nothing -> do
-                  logAff $ "Computer cant think of a word to play."
+                  logAff $ "Computer cant think of a word to play.\n"
                   gameLoop (state { gameStatus = Win User })
                 Just p -> do
-                  logAff $ "\nComputer plays: " <> p
+                  logAff $ "Computer plays: " <> p <> "\n"
                   gameLoop
                     ( state
                         { gameStatus =

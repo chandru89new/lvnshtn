@@ -1,8 +1,12 @@
 {
+  "name": "wordladder",
   "dependencies": {
     "esbuild": "^0.25.10"
   },
   "scripts": {
-    "bundle": "rm -rf dist && spago build && node bundle.js && chmod +x ./dist/word-ladder"
+    "bundle": "rm -rf dist && spago build && node bundle.js && chmod +x ./dist/wordladder"
+  },
+  "bin": {
+    "wordladder": "./dist/wordladder"
   }
 }

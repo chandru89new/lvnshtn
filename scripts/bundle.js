@@ -4,7 +4,7 @@ esbuild
     entryPoints: ["output/Main/index.js"],
     bundle: true,
     platform: "node",
-    outfile: "dist/word-ladder",
+    outfile: "dist/wordladder",
     format: "cjs",
     target: "node14", // Enable this - defines minimum Node version
     minify: true, // Minify the output
@@ -20,7 +20,8 @@ esbuild
   })
   .then(() => {
     console.log("✓ Build successful!");
-    console.log("Run with: node dist/word-ladder");
+    console.log("Run with: `node dist/wordladder` or `./dist/wordladder`");
+    process.exit(0);
   })
   .catch((err) => {
     console.error("✗ Build failed:", err);
