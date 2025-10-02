@@ -8,7 +8,7 @@
     "bundle": "rm -rf dist && spago build && node bundle.js && chmod +x ./dist/wordladder"
   },
   "bin": {
-    "wordladder": "./dist/wordladder"
+    "wordladder": "dist/wordladder"
   },
   "files": [
     "dist"
