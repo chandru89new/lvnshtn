@@ -36,7 +36,7 @@ main = launchAff_ $ do
     gameLoop s
 
 getAllWords :: Set String
-getAllWords = Set.union words3 words4
+getAllWords = Set.unions [ words3, words4, words5 ]
 
 getAllWordsByLen :: Int -> Set String
 getAllWordsByLen n =
@@ -188,12 +188,13 @@ gameLoop state = do
           else
             let
               path = map snd $ getShortestPath state.dictionary state.lastPlayedWord (snd state.gameWords)
-              nextBestWord = join $ map
-                ( \p -> case p !! 1 of
-                    Just w -> if elem w state.playedWords then (head allowed) else Just w
-                    Nothing -> head allowed
-                )
-                path
+              nextBestWord = do
+                p <- path
+                case p !! 1 of
+                  Just w
+                    | elem w state.playedWords -> head allowed
+                    | otherwise -> Just w
+                  Nothing -> head allowed
             in
               case nextBestWord of
                 Nothing -> do
