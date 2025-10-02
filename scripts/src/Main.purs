@@ -110,8 +110,8 @@ getShortestPath dictionary source target =
     in
       map (\path -> Tuple (A.length path - 1) path) res
 
-test :: String -> String -> Effect Unit
-test s t = do
+runGetShortestPath :: String -> String -> Effect Unit
+runGetShortestPath s t = do
   let dict = getAllWords
   if not (isValidWord dict s) then log (s <> " is not a valid word")
   else if not (isValidWord dict t) then log (t <> " is not a valid word")
@@ -261,3 +261,10 @@ hammingDistance wrd1 wrd2 =
     differences = zipWith (\c1 c2 -> if c1 == c2 then 0 else 1) chars1 chars2
   in
     sum differences
+
+runGetAllPossibilities :: String -> Array String
+runGetAllPossibilities word =
+  let
+    dict = getAllWordsByLen (length word)
+  in
+    getAllPossibilities dict word
