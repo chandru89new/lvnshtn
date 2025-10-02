@@ -3,18 +3,14 @@ module Main where
 import Prelude
 
 import Control.Alternative (guard)
-import Control.Apply (lift2)
 import Data.Array (elem, filter, head, last, mapWithIndex, null, sortBy, tail, zipWith, (!!), (..))
 import Data.Array (length) as A
 import Data.Foldable (sum)
-import Data.Int (fromNumber, toNumber)
-import Data.Map (Map, fromFoldable, lookup) as Map
+import Data.Int (fromString)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Number (abs)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.String (Pattern(..), joinWith, length, split, trim)
-import Data.String.Utils (lines)
 import Data.Tuple (Tuple(..), snd)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
@@ -22,31 +18,29 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console (logShow)
 import Effect.Console (log)
 import Effect.Random (randomInt)
-import Node.Encoding (Encoding(..))
-import Node.FS.Sync (readTextFile, writeTextFile)
 import Node.Process (exit)
 import Node.ReadLine (close, createConsoleInterface, noCompletion)
 import Node.ReadLine.Aff (question)
+import Words (words4, words3, words5)
 
 main :: Effect Unit
 main = launchAff_ $ do
-  s <- startGame
-  gameLoop s
+  mainLoop
+  where
+  mainLoop = do
+    input <- readLine "Choose word length (3, 4 or 5)"
+    when (not (elem input [ "3", "4", "5" ])) $ do
+      logAff "Invalid input. Please enter 3, 4 or 5."
+      mainLoop
+    s <- startGame (fromMaybe 3 (fromString input))
+    gameLoop s
 
-writeDict :: Effect Unit
-writeDict = do
-  words <- getAllWords
-  writeTextFile UTF8 "filtered_words.txt" (joinWith "," $ Set.toUnfoldable words)
+getAllWords :: Set String
+getAllWords = Set.union words3 words4
 
-getAllWords :: Effect (Set String)
-getAllWords = do
-  dump <- readTextFile UTF8 "words_alpha.txt"
-  pure $ Set.fromFoldable (filter filterWord (lines dump))
-
-getAllWordsByLen :: Int -> Effect (Set String)
-getAllWordsByLen n = do
-  dump <- readTextFile UTF8 "words_alpha.txt"
-  pure $ Set.fromFoldable (filter (\w -> length w == n) (lines dump))
+getAllWordsByLen :: Int -> Set String
+getAllWordsByLen n =
+  if n == 3 then words3 else if n == 4 then words4 else words5
 
 filterWord :: String -> Boolean
 filterWord str = length str >= 3 && length str <= 5
@@ -118,7 +112,7 @@ getShortestPath dictionary source target =
 
 test :: String -> String -> Effect Unit
 test s t = do
-  dict <- getAllWords
+  let dict = getAllWords
   if not (isValidWord dict s) then log (s <> " is not a valid word")
   else if not (isValidWord dict t) then log (t <> " is not a valid word")
   else if length s /= length t then log "Words must be of same length"
@@ -245,9 +239,9 @@ readLine str = do
   _ <- liftEffect $ close interface
   pure input
 
-startGame :: Aff GameState
-startGame = do
-  dict <- liftEffect $ getAllWordsByLen 4
+startGame :: Int -> Aff GameState
+startGame level = do
+  let dict = getAllWordsByLen level
   source <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
   target <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
   pure $ gameStateInit { dictionary = dict, gameWords = Tuple source target, lastPlayedWord = source, playedWords = [ source ] }
@@ -256,31 +250,13 @@ logAff :: String -> Aff Unit
 logAff = liftEffect <<< log
 
 rankByClosest :: String -> Array String -> Array String
-rankByClosest target wrds = sortBy (\a b -> compare (scoreWords a target) (scoreWords b target)) wrds
+rankByClosest target wrds = sortBy (comparing (hammingDistance target)) wrds
 
-compareChar :: String -> String -> Int
-compareChar c1 c2 =
-  let
-    scoreC1 = Map.lookup c1 wordVal
-    scoreC2 = Map.lookup c2 wordVal
-
-    score :: Maybe Int
-    score = join $ map fromNumber $ lift2 (\sc1 sc2 -> abs $ toNumber (sc1 - sc2)) scoreC1 scoreC2
-  in
-    fromMaybe 50 score
-
-scoreWords :: String -> String -> Int
-scoreWords wrd1 wrd2 =
+hammingDistance :: String -> String -> Int
+hammingDistance wrd1 wrd2 =
   let
     chars1 = split (Pattern "") wrd1
     chars2 = split (Pattern "") wrd2
-    pairs = zipWith compareChar chars1 chars2
+    differences = zipWith (\c1 c2 -> if c1 == c2 then 0 else 1) chars1 chars2
   in
-    sum pairs
-
-wordVal :: Map.Map String Int
-wordVal =
-  let
-    alphabets = split (Pattern "") "abcdefghijklmnopqrstuvwxyz"
-  in
-    Map.fromFoldable $ mapWithIndex (\i c -> Tuple c (i + 1)) alphabets
+    sum differences
