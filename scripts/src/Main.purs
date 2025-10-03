@@ -221,7 +221,7 @@ showPath state =
     t = snd state.gameWords
     playedWords = state.playedWords
   in
-    (joinWith " -> " playedWords) <> " ... " <> t
+    (joinWith " → " playedWords) <> " ... " <> t
 
 gameStateInit :: GameState
 gameStateInit =
