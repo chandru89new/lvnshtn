@@ -3,7 +3,7 @@ module Main where
 import Prelude
 
 import Control.Alternative (guard)
-import Data.Array (elem, filter, head, last, mapWithIndex, null, sortBy, tail, zipWith, (!!), (..))
+import Data.Array (elem, filter, head, last, mapWithIndex, sortBy, tail, zipWith, (!!), (..))
 import Data.Array (length) as A
 import Data.Foldable (sum)
 import Data.Int (fromString)
@@ -14,7 +14,7 @@ import Data.String (Pattern(..), joinWith, length, split, trim)
 import Data.Tuple (Tuple(..), snd)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
-import Effect.Class (liftEffect)
+import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console (logShow)
 import Effect.Console (log)
 import Effect.Random (randomInt)
@@ -243,8 +243,7 @@ readLine str = do
 startGame :: Int -> Aff GameState
 startGame level = do
   let dict = getAllWordsByLen level
-  source <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
-  target <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
+  (Tuple source target) <- getRandomPlayableWord dict
   pure $ gameStateInit { dictionary = dict, gameWords = Tuple source target, lastPlayedWord = source, playedWords = [ source ] }
 
 logAff :: String -> Aff Unit
@@ -268,3 +267,11 @@ runGetAllPossibilities word =
     dict = getAllWordsByLen (length word)
   in
     getAllPossibilities dict word
+
+getRandomPlayableWord :: forall m. MonadEffect m => Set String -> m (Tuple String String)
+getRandomPlayableWord dict = do
+  source <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
+  target <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
+  case getShortestPath dict source target of
+    Nothing -> getRandomPlayableWord dict
+    Just _ -> pure $ Tuple source target
