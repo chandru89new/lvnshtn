@@ -18,22 +18,57 @@ import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console (logShow)
 import Effect.Console (log)
 import Effect.Random (randomInt)
-import Node.Process (exit)
+import Node.Process (exit')
 import Node.ReadLine (close, createConsoleInterface, noCompletion)
 import Node.ReadLine.Aff (question)
 import Words (words4, words3, words5)
 
 main :: Effect Unit
 main = launchAff_ $ do
+  logAff introText
   mainLoop
   where
   mainLoop = do
     input <- readLine "Choose word length (3, 4 or 5)"
     when (not (elem input [ "3", "4", "5" ])) $ do
-      logAff "Invalid input. Please enter 3, 4 or 5."
+      logAff $ colorWarning "Invalid input. Please enter 3, 4 or 5."
       mainLoop
     s <- startGame (fromMaybe 3 (fromString input))
-    gameLoop s
+    state <- gameLoop s
+    liftEffect $ case state.gameStatus of
+      Win _ -> exit' 0
+      Over _ -> exit' 1
+      _ -> pure unit
+
+introText :: String
+introText =
+  colorSuccess "\nWelcome to wordladder!\n"
+    <> colorInfo "You"
+    <> " vs. "
+    <> colorWarning "Computer\n"
+    <> "Change one letter at a time to get a new word.\n"
+    <> "Reach the goal word first and win!\n"
+    <> "Let's begin!\n"
+
+data Color = Red | Green | Blue | Yellow
+
+colorLog :: Color -> String -> String
+colorLog Red str = "\x1b[31m" <> str <> "\x1b[0m"
+colorLog Green str = "\x1b[32m" <> str <> "\x1b[0m"
+colorLog Blue str = "\x1b[34m" <> str <> "\x1b[0m"
+colorLog Yellow str = "\x1b[33m" <> str <> "\x1b[0m"
+
+colorError :: String -> String
+colorError = colorLog Red
+
+colorWarning :: String -> String
+colorWarning = colorLog Yellow
+
+colorSuccess :: String -> String
+colorSuccess = colorLog Green
+
+colorInfo :: String -> String
+colorInfo = colorLog Blue
 
 getAllWords :: Set String
 getAllWords = Set.unions [ words3, words4, words5 ]
@@ -145,12 +180,14 @@ instance showGameType :: Show GameType where
   show PvC = "Player vs Computer"
   show PvP = "Player vs Player"
 
-gameLoop :: GameState -> Aff Unit
+gameLoop :: GameState -> Aff GameState
 gameLoop state = do
   case state.gameStatus of
     Win player -> do
-      logAff $ (show player) <> " wins!\n"
-      liftEffect $ exit
+      logAff $ case player of
+        Computer -> colorWarning "Computer wins!\n"
+        User -> colorSuccess "\nYou win!\n"
+      pure state
     Play player -> do
       logAff $ showPath state
       allowed <- pure $ rankByClosest (snd state.gameWords) $ (filter (\w -> not $ elem w state.playedWords)) $ getAllPossibilities state.dictionary state.lastPlayedWord
@@ -158,20 +195,20 @@ gameLoop state = do
       --   gameLoop (state { gameStatus = Over "No more possible words can be played. Game ends without a winner!" })
       case player of
         User -> do
-          input <- readLine "Enter your word (enter empty to forfeit)"
-          when (trim input == "") $ do
-            logAff "You forfeited the game.\n"
+          input <- readLine $ colorInfo "You (enter empty to forfeit)"
+          if (trim input == "") then do
+            logAff $ colorError "You forfeited the game.\n"
             gameLoop (state { gameStatus = Win Computer })
-          when (elem input state.playedWords) $ do
-            logAff $ "That's already played, friend. Try another.\n"
+          else if (elem input state.playedWords) then do
+            logAff $ colorError $ "That's already played, friend. Try another.\n"
             gameLoop state
-          when (not (isValidWord state.dictionary input)) do
-            logAff "Hey, that's not a valid word in my dictionary. Try again.\n"
+          else if (not (isValidWord state.dictionary input)) then do
+            logAff $ colorError "Hey, that's not a valid word in my dictionary. Try again.\n"
             gameLoop state
-          when (not $ elem input allowed) $ do
-            logAff $ "Only one letter change at a time, friend. Try again.\n"
+          else if (not $ elem input allowed) then do
+            logAff $ colorError $ "Only one letter change at a time, friend. Try again.\n"
             gameLoop state
-          gameLoop
+          else gameLoop
             ( state
                 { gameStatus =
                     if input == snd state.gameWords then Win User
@@ -183,8 +220,8 @@ gameLoop state = do
             )
         Computer -> do
           if (elem (snd state.gameWords) allowed) then do
-            logAff $ "Computer plays: " <> (snd state.gameWords) <> " and wins!\n"
-            liftEffect $ exit
+            logAff $ colorWarning $ "Computer plays: " <> (snd state.gameWords) <> " and wins!\n"
+            pure state
           else
             let
               path = map snd $ getShortestPath state.dictionary state.lastPlayedWord (snd state.gameWords)
@@ -201,7 +238,7 @@ gameLoop state = do
                   logAff $ "Computer cant think of a word to play.\n"
                   gameLoop (state { gameStatus = Win User })
                 Just p -> do
-                  logAff $ "Computer plays: " <> p <> "\n"
+                  logAff $ colorWarning "Computer plays: " <> p <> "\n"
                   gameLoop
                     ( state
                         { gameStatus =
@@ -213,13 +250,13 @@ gameLoop state = do
                     )
     Over reason -> do
       logAff $ reason
-      liftEffect $ exit
+      pure state
 
 showPath :: GameState -> String
 showPath state =
   let
     t = snd state.gameWords
-    playedWords = state.playedWords
+    playedWords = mapWithIndex (\i w -> if i == 0 then w else if i > 0 && mod i 2 == 0 then colorWarning w else colorInfo w) state.playedWords
   in
     (joinWith " → " playedWords) <> " ... " <> t
 
