@@ -25,6 +25,7 @@ to generate this file without the comments in this block.
   , "prelude"
   , "random"
   , "strings"
+  , "transformers"
   , "tuples"
   ]
 , packages = ./packages.dhall

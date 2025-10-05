@@ -4,6 +4,7 @@ import Prelude
 
 import Control.Alternative (guard)
 import Control.Apply (lift2)
+import Control.Monad.Writer (Writer, tell)
 import Data.Array (elem, (!!), (..))
 import Data.Array as A
 import Data.Foldable (sum)
@@ -49,46 +50,56 @@ type GameState =
   }
 
 -- FUNCTIONS
-updateGameState :: GameState -> Tuple GameState (Array GameEffect)
+updateGameState :: GameState -> Writer (Array GameEffect) GameState
 updateGameState state = case state.currentState of
-  NotInitialized -> Tuple state [ AskUserToChooseDifficulty ]
-  DifficultySet int -> Tuple (state { dictionary = dict, wordLength = int }) [ InitializeGame ]
+  NotInitialized -> do
+    tell [ AskUserToChooseDifficulty ]
+    pure state
+
+  DifficultySet int -> do
+    tell [ InitializeGame ]
+    pure (state { dictionary = dict, wordLength = int })
     where
     dict = getAllWordsByLen int
 
-  UserPlayed word -> result
+  UserPlayed word ->
+    if trim word == "" then do
+      tell [ Log (colorError "You forfeited! Computer wins!"), ReinitializeGame ]
+      pure state
+    else if isAlreadyPlayed then do
+      tell [ Log (colorError "Word already played. Try again."), Log (showPath state), AskUserToPlay ]
+      pure state
+    else if not isValidEnglishWord then do
+      tell [ Log (colorError "Word not in dictionary. Try again."), Log (showPath state), AskUserToPlay ]
+      pure state
+    else if not isInAllowed then do
+      tell [ Log (colorError "Word must differ by exactly one letter. Try again."), Log (showPath state), AskUserToPlay ]
+      pure state
+    else if hasWon then do
+      tell [ Log (colorSuccess "You win!"), ReinitializeGame ]
+      pure state
+    else do
+      let newState = state { lastPlayedWord = word, playedPath = newPath }
+      tell [ Log (showPath newState), Log "Thinking...", AskComputerToPlay ]
+      pure newState
     where
-    result =
-      let
-        isValidEnglishWord = isValidWord state.dictionary word
-        isInAllowed = elem word (getAllPossibilities state.dictionary state.lastPlayedWord)
-        isAlreadyPlayed = elem word state.playedPath
-        hasWon = word == snd state.gameWords
-        newPath = state.playedPath <> [ word ]
-      in
-        if trim word == "" then (Tuple state [ Log (colorError "You forfeited! Computer wins!"), ReinitializeGame ])
-        else if isAlreadyPlayed then (Tuple state [ Log (colorError "Word already played. Try again."), Log (showPath state), AskUserToPlay ])
-        else if not isValidEnglishWord then (Tuple state [ Log (colorError "Word not in dictionary. Try again."), Log (showPath state), AskUserToPlay ])
-        else if not isInAllowed then (Tuple state [ Log (colorError "Word must differ by exactly one letter. Try again."), Log (showPath state), AskUserToPlay ])
-        else if hasWon then (Tuple state [ Log (colorSuccess "You win!"), ReinitializeGame ])
-        else
-          let
-            newState = state { lastPlayedWord = word, playedPath = newPath }
-          in
-            (Tuple newState [ Log (showPath newState), Log "Thinking...", AskComputerToPlay ])
-  ComputerPlayed word -> result
+    isValidEnglishWord = isValidWord state.dictionary word
+    isInAllowed = elem word (getAllPossibilities state.dictionary state.lastPlayedWord)
+    isAlreadyPlayed = elem word state.playedPath
+    hasWon = word == snd state.gameWords
+    newPath = state.playedPath <> [ word ]
+
+  ComputerPlayed word ->
+    if hasWon then do
+      tell [ Log (colorWarning $ "Computer plays '" <> word <> "' and wins!"), ReinitializeGame ]
+      pure state
+    else do
+      let newState = state { lastPlayedWord = word, playedPath = newPath }
+      tell [ Log (colorWarning $ "Computer played: " <> word), Log (showPath newState), AskUserToPlay ]
+      pure newState
     where
-    result =
-      let
-        hasWon = word == snd state.gameWords
-        newPath = state.playedPath <> [ word ]
-      in
-        if hasWon then (Tuple state [ Log (colorWarning $ "Computer plays '" <> word <> "' and wins!"), ReinitializeGame ])
-        else
-          let
-            newState = state { lastPlayedWord = word, playedPath = newPath }
-          in
-            (Tuple newState [ Log (colorWarning $ "Computer played: " <> word), Log (showPath newState), AskUserToPlay ])
+    hasWon = word == snd state.gameWords
+    newPath = state.playedPath <> [ word ]
 
 handleEffect :: GameState -> GameEffect -> Aff (Tuple GameState (Array GameEffect))
 handleEffect state (Log msg) = do
@@ -132,14 +143,14 @@ handleEffect state ReinitializeGame = do
   pure $ Tuple (state { currentState = DifficultySet state.wordLength }) []
 
 handleEffects :: GameState -> Array GameEffect -> Aff GameState
-handleEffects state effects = go effects state
+handleEffects = go
   where
-  go :: Array GameEffect -> GameState -> Aff GameState
-  go effs s = case A.head effs of
-    Nothing -> pure $ s
-    Just e -> do
-      Tuple s' newEffs <- handleEffect s e
-      go (newEffs <> (fromMaybe [] $ A.tail effs)) s'
+  go :: GameState -> Array GameEffect -> Aff GameState
+  go state effects = case A.uncons effects of
+    Nothing -> pure state
+    Just { head: eff, tail: rest } -> do
+      Tuple state' newEffects <- handleEffect state eff
+      go state' (newEffects <> rest)
 
 getAllWordsByLen :: Int -> Set String
 getAllWordsByLen n =
