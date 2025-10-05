@@ -94,7 +94,7 @@ updateGameState state = case state.currentState of
         if trim word == "" then (Tuple state [ Log (colorError "You forfeited! Computer wins!"), ReinitializeGame ])
         else if isAlreadyPlayed then (Tuple state [ Log (colorError "Word already played. Try again."), Log (showPath state), AskUserToPlay ])
         else if not isValidEnglishWord then (Tuple state [ Log (colorError "Word not in dictionary. Try again."), Log (showPath state), AskUserToPlay ])
-        else if not isInAllowed then (Tuple state [ Log (colorError "Word must differ by exactly one letter. Try again."), Log (showPath state) ])
+        else if not isInAllowed then (Tuple state [ Log (colorError "Word must differ by exactly one letter. Try again."), Log (showPath state), AskUserToPlay ])
         else if hasWon then (Tuple state [ Log (colorSuccess "You win!"), ReinitializeGame ])
         else
           let
