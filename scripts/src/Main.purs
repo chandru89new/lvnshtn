@@ -34,13 +34,14 @@ main = do
       , playedPath: []
       , gameWords: Tuple "" ""
       , currentState: NotInitialized
+      , wordLength: 0
       }
   launchAff_ $ do
     let
       loop state = do
         let Tuple newState effects = updateGameState state
         if A.length effects == 0 then
-          pure unit
+          loop newState
         else do
           finalState <- handleEffects newState effects
           loop finalState
@@ -49,11 +50,11 @@ main = do
 -- TYPES
 data GameEffect
   = Log String
-  | Exit Int
   | AskUserToChooseDifficulty
   | InitializeGame
   | AskUserToPlay
   | AskComputerToPlay
+  | ReinitializeGame
 
 data CurrentState
   = NotInitialized
@@ -65,6 +66,7 @@ data Color = Red | Green | Blue | Yellow
 
 type GameState =
   { lastPlayedWord :: String
+  , wordLength :: Int
   , dictionary :: Set String
   , playedPath :: Array String
   , gameWords :: Tuple String String
@@ -75,7 +77,7 @@ type GameState =
 updateGameState :: GameState -> Tuple GameState (Array GameEffect)
 updateGameState state = case state.currentState of
   NotInitialized -> Tuple state [ AskUserToChooseDifficulty ]
-  DifficultySet int -> Tuple (state { dictionary = dict }) [ InitializeGame ]
+  DifficultySet int -> Tuple (state { dictionary = dict, wordLength = int }) [ InitializeGame ]
     where
     dict = getAllWordsByLen int
 
@@ -89,11 +91,11 @@ updateGameState state = case state.currentState of
         hasWon = word == snd state.gameWords
         newPath = state.playedPath <> [ word ]
       in
-        if trim word == "" then (Tuple state [ Log (colorError "You forfeited! Computer wins!"), Exit 0 ])
+        if trim word == "" then (Tuple state [ Log (colorError "You forfeited! Computer wins!"), ReinitializeGame ])
         else if isAlreadyPlayed then (Tuple state [ Log (colorError "Word already played. Try again."), Log (showPath state), AskUserToPlay ])
         else if not isValidEnglishWord then (Tuple state [ Log (colorError "Word not in dictionary. Try again."), Log (showPath state), AskUserToPlay ])
         else if not isInAllowed then (Tuple state [ Log (colorError "Word must differ by exactly one letter. Try again."), Log (showPath state) ])
-        else if hasWon then (Tuple state [ Log (colorSuccess "You win!"), Exit 0 ])
+        else if hasWon then (Tuple state [ Log (colorSuccess "You win!"), ReinitializeGame ])
         else
           let
             newState = state { lastPlayedWord = word, playedPath = newPath }
@@ -106,7 +108,7 @@ updateGameState state = case state.currentState of
         hasWon = word == snd state.gameWords
         newPath = state.playedPath <> [ word ]
       in
-        if hasWon then (Tuple state [ Log (colorWarning $ "Computer plays '" <> word <> "' and wins!"), Exit 0 ])
+        if hasWon then (Tuple state [ Log (colorWarning $ "Computer plays '" <> word <> "' and wins!"), ReinitializeGame ])
         else
           let
             newState = state { lastPlayedWord = word, playedPath = newPath }
@@ -117,8 +119,6 @@ handleEffect :: GameState -> GameEffect -> Aff (Tuple GameState (Array GameEffec
 handleEffect state (Log msg) = do
   log msg
   pure $ Tuple state []
-handleEffect _ (Exit code) = do
-  liftEffect $ exit' code
 handleEffect state AskUserToChooseDifficulty = do
   input <- readLine $ colorInfo "Choose word length (3, 4, or 5)"
   if (elem input [ "3", "4", "5" ]) then
@@ -128,7 +128,7 @@ handleEffect state AskUserToChooseDifficulty = do
     pure $ Tuple state [ AskUserToChooseDifficulty ]
 handleEffect state InitializeGame = do
   let dict = state.dictionary
-  wrds <- liftEffect $ getRandomPlayableWord dict
+  wrds <- getRandomPlayableWord dict
   let
     newPath = [ fst wrds ]
     newState = (state { lastPlayedWord = fst wrds, gameWords = wrds, playedPath = newPath })
@@ -138,22 +138,23 @@ handleEffect state AskUserToPlay = do
   pure $ Tuple (state { currentState = UserPlayed input }) []
 handleEffect state AskComputerToPlay = do
   _ <- delay (Milliseconds (toNumber 1000))
-  let allowed = rankByClosest (snd state.gameWords) $ (A.filter (\w -> not $ elem w state.playedPath)) $ getAllPossibilities state.dictionary state.lastPlayedWord
-  if A.length allowed == 0 then
-    pure $ Tuple state [ Log "Computer can't think of any word!", Log (colorSuccess "You win!"), Exit 0 ]
-  else do
-    let
-      path = map snd $ getShortestPath state.dictionary state.lastPlayedWord (snd state.gameWords)
-      nextBestWord = do
-        p <- path
-        case p !! 1 of
-          Just w
-            | elem w state.playedPath -> A.head allowed
-            | otherwise -> Just w
-          Nothing -> A.head allowed
-    case nextBestWord of
-      Nothing -> pure $ Tuple state [ Log "Computer can't think of any word!", Log (colorSuccess "You win!"), Exit 0 ]
-      Just word -> pure $ Tuple (state { currentState = ComputerPlayed word }) []
+  let
+    allowed = rankByClosest (snd state.gameWords) $ (A.filter (\w -> not $ elem w state.playedPath)) $ getAllPossibilities state.dictionary state.lastPlayedWord
+    path = map snd $ getShortestPath state.dictionary state.lastPlayedWord (snd state.gameWords)
+    nextBestWord = do
+      p <- path
+      case p !! 1 of
+        Just w
+          | elem w state.playedPath -> A.head allowed
+          | otherwise -> Just w
+        Nothing -> A.head allowed
+  case nextBestWord of
+    Nothing -> pure $ Tuple state [ Log "Computer can't think of any word!", Log (colorSuccess "You win!"), ReinitializeGame ]
+    Just word -> pure $ Tuple (state { currentState = ComputerPlayed word }) []
+handleEffect state ReinitializeGame = do
+  log $ "New game..."
+  _ <- delay (Milliseconds (toNumber 1000))
+  pure $ Tuple (state { currentState = DifficultySet state.wordLength }) []
 
 handleEffects :: GameState -> Array GameEffect -> Aff GameState
 handleEffects state effects = go effects state
@@ -310,11 +311,11 @@ instance showCurrentState :: Show CurrentState where
 
 instance showGameEffect :: Show GameEffect where
   show (Log str) = "Log " <> str
-  show (Exit n) = "Exit " <> show n
   show AskUserToChooseDifficulty = "AskUserToChooseDifficulty"
   show InitializeGame = "InitializeGame"
   show AskUserToPlay = "AskUserToPlay"
   show AskComputerToPlay = "AskComputerToPlay"
+  show ReinitializeGame = "ReinitializeGame"
 
 derive instance Eq CurrentState
 derive instance Eq GameEffect
