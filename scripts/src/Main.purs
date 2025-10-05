@@ -1,4 +1,4 @@
-module Game where
+module Main where
 
 import Prelude
 
@@ -7,14 +7,14 @@ import Control.Apply (lift2)
 import Data.Array (elem, (!!), (..))
 import Data.Array as A
 import Data.Foldable (sum)
-import Data.Int (fromString)
+import Data.Int (fromString, toNumber)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.String (Pattern(..), joinWith, length, split, trim)
 import Data.Tuple (Tuple(..), fst, snd)
 import Effect (Effect)
-import Effect.Aff (Aff, launchAff_)
+import Effect.Aff (Aff, Milliseconds(..), delay, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console (log)
 import Effect.Random (randomInt)
@@ -53,13 +53,13 @@ data GameEffect
   | AskUserToChooseDifficulty
   | InitializeGame
   | AskUserToPlay
-  | AskComputerToPlay'
+  | AskComputerToPlay
 
 data CurrentState
   = NotInitialized
   | DifficultySet Int
-  | UserPlayed' String
-  | ComputerPlayed' String
+  | UserPlayed String
+  | ComputerPlayed String
 
 data Color = Red | Green | Blue | Yellow
 
@@ -79,7 +79,7 @@ updateGameState state = case state.currentState of
     where
     dict = getAllWordsByLen int
 
-  UserPlayed' word -> result
+  UserPlayed word -> result
     where
     result =
       let
@@ -98,15 +98,15 @@ updateGameState state = case state.currentState of
           let
             newState = state { lastPlayedWord = word, playedPath = newPath }
           in
-            (Tuple newState [ Log (showPath newState), AskComputerToPlay' ])
-  ComputerPlayed' word -> result
+            (Tuple newState [ Log (showPath newState), Log "Thinking...", AskComputerToPlay ])
+  ComputerPlayed word -> result
     where
     result =
       let
         hasWon = word == snd state.gameWords
         newPath = state.playedPath <> [ word ]
       in
-        if hasWon then (Tuple state [ Log (colorWarning "Computer wins!"), Exit 0 ])
+        if hasWon then (Tuple state [ Log (colorWarning $ "Computer plays '" <> word <> "' and wins!"), Exit 0 ])
         else
           let
             newState = state { lastPlayedWord = word, playedPath = newPath }
@@ -135,8 +135,9 @@ handleEffect state InitializeGame = do
   pure $ Tuple newState [ Log $ showPath newState, AskUserToPlay ]
 handleEffect state AskUserToPlay = do
   input <- readLine $ colorUser "You (or hit Enter to forfeit)"
-  pure $ Tuple (state { currentState = UserPlayed' input }) []
-handleEffect state AskComputerToPlay' = do
+  pure $ Tuple (state { currentState = UserPlayed input }) []
+handleEffect state AskComputerToPlay = do
+  _ <- delay (Milliseconds (toNumber 1500))
   let allowed = rankByClosest (snd state.gameWords) $ (A.filter (\w -> not $ elem w state.playedPath)) $ getAllPossibilities state.dictionary state.lastPlayedWord
   if A.length allowed == 0 then
     pure $ Tuple state [ Log "Computer can't think of any word!", Log (colorSuccess "You win!"), Exit 0 ]
@@ -152,7 +153,7 @@ handleEffect state AskComputerToPlay' = do
           Nothing -> A.head allowed
     case nextBestWord of
       Nothing -> pure $ Tuple state [ Log "Computer can't think of any word!", Log (colorSuccess "You win!"), Exit 0 ]
-      Just word -> pure $ Tuple (state { currentState = ComputerPlayed' word }) []
+      Just word -> pure $ Tuple (state { currentState = ComputerPlayed word }) []
 
 handleEffects :: GameState -> Array GameEffect -> Aff GameState
 handleEffects state effects = go effects state
@@ -298,4 +299,24 @@ introText =
     <> "Change one letter at a time to get a new word.\n"
     <> "Reach the goal word first and win!\n"
     <> "Let's begin!\n"
+
+-- INSTANCES
+
+instance showCurrentState :: Show CurrentState where
+  show NotInitialized = "NotInitialized"
+  show (DifficultySet n) = "DifficultySet " <> show n
+  show (UserPlayed str) = "UserPlayed " <> str
+  show (ComputerPlayed str) = "ComputerPlayed " <> str
+
+instance showGameEffect :: Show GameEffect where
+  show (Log str) = "Log " <> str
+  show (Exit n) = "Exit " <> show n
+  show AskUserToChooseDifficulty = "AskUserToChooseDifficulty"
+  show InitializeGame = "InitializeGame"
+  show AskUserToPlay = "AskUserToPlay"
+  show AskComputerToPlay = "AskComputerToPlay"
+
+derive instance Eq CurrentState
+derive instance Eq GameEffect
+derive instance Eq Color
 
