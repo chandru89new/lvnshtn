@@ -4,6 +4,7 @@ import Prelude
 
 import Control.Alternative (guard)
 import Control.Apply (lift2)
+import Control.Monad.Rec.Class (Step(..), tailRecM)
 import Control.Monad.Writer (Writer, tell)
 import Data.Array (elem, (!!), (..))
 import Data.Array as A
@@ -143,14 +144,15 @@ handleEffect state ReinitializeGame = do
   pure $ Tuple (state { currentState = DifficultySet state.wordLength }) []
 
 handleEffects :: GameState -> Array GameEffect -> Aff GameState
-handleEffects = go
+handleEffects initialState initialEffects =
+  tailRecM go (Tuple initialState initialEffects)
   where
-  go :: GameState -> Array GameEffect -> Aff GameState
-  go state effects = case A.uncons effects of
-    Nothing -> pure state
+  go :: (Tuple GameState (Array GameEffect)) -> Aff (Step (Tuple GameState (Array GameEffect)) GameState)
+  go (Tuple state effects) = case A.uncons effects of
+    Nothing -> pure $ Done state
     Just { head: eff, tail: rest } -> do
       Tuple state' newEffects <- handleEffect state eff
-      go state' (newEffects <> rest)
+      pure $ Loop (Tuple state' (newEffects <> rest))
 
 getAllWordsByLen :: Int -> Set String
 getAllWordsByLen n =
