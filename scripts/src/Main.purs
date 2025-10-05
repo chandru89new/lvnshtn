@@ -137,7 +137,7 @@ handleEffect state AskUserToPlay = do
   input <- readLine $ colorUser "You (or hit Enter to forfeit)"
   pure $ Tuple (state { currentState = UserPlayed input }) []
 handleEffect state AskComputerToPlay = do
-  _ <- delay (Milliseconds (toNumber 1500))
+  _ <- delay (Milliseconds (toNumber 1000))
   let allowed = rankByClosest (snd state.gameWords) $ (A.filter (\w -> not $ elem w state.playedPath)) $ getAllPossibilities state.dictionary state.lastPlayedWord
   if A.length allowed == 0 then
     pure $ Tuple state [ Log "Computer can't think of any word!", Log (colorSuccess "You win!"), Exit 0 ]
