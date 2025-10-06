@@ -220,9 +220,9 @@ getAllPossibilities dictionary wrd =
     possibilities = do
       idx <- indices
       c <- alphabets
-      let newWord = A.mapWithIndex (\i ch -> if i == idx then c else ch) wrdAsArray
-      guard (isValidWord dictionary (joinWith "" newWord) && (joinWith "" newWord) /= wrd)
-      pure (joinWith "" newWord)
+      let newWord = joinWith "" $ A.mapWithIndex (\i ch -> if i == idx then c else ch) wrdAsArray
+      guard (isValidWord dictionary newWord && newWord /= wrd)
+      pure newWord
   in
     possibilities
 
