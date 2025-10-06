@@ -1,6 +1,6 @@
 {
   "name": "wordladder",
-  "version": "0.1.9",
+  "version": "0.1.11",
   "devDependencies": {
     "esbuild": "0.25.10"
   },
@@ -11,6 +11,7 @@
     "wordladder": "dist/wordladder"
   },
   "files": [
-    "dist"
+    "dist",
+    "readme.md"
   ]
 }
