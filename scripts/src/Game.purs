@@ -162,10 +162,10 @@ getRandomPlayableWord :: forall m. MonadEffect m => Set String -> m (Tuple Strin
 getRandomPlayableWord dict = do
   source <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
   target <- liftEffect $ getRandomWord (Set.toUnfoldable dict)
-  shortestPath <- pure $ join $ lift2 (\s t -> map snd (getShortestPath dict s t)) source target
+  let shortestPath = lift2 (\s t -> map snd (getShortestPath dict s t)) source target
   case shortestPath of
-    Nothing -> getRandomPlayableWord dict
-    Just _ -> pure $ Tuple (fromMaybe "" source) (fromMaybe "" target)
+    Just (Just _) -> pure $ Tuple (fromMaybe "" source) (fromMaybe "" target)
+    _ -> getRandomPlayableWord dict
 
 randomNum :: Int -> Effect Int
 randomNum max = randomInt 0 max
@@ -173,7 +173,7 @@ randomNum max = randomInt 0 max
 getRandomWord :: Array String -> Effect (Maybe String)
 getRandomWord dictionary = do
   idx <- randomNum (A.length dictionary - 1)
-  pure $ dictionary !! idx
+  pure $ if idx < 0 then Nothing else dictionary !! idx
 
 getShortestPath :: Set String -> String -> String -> Maybe (Tuple Int (Array String))
 getShortestPath dictionary source target =
