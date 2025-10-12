@@ -32,6 +32,7 @@ data GameEffect
   | AskUserToPlay
   | AskComputerToPlay
   | ReinitializeGame
+  | PrintPossibleSolution
 
 data CurrentState
   = NotInitialized
@@ -65,7 +66,7 @@ updateGameState state = case state.currentState of
 
   UserPlayed word ->
     if trim word == "" then do
-      tell [ Log (colorError "You forfeited! Computer wins!"), ReinitializeGame ]
+      tell [ Log (colorError "You forfeited! Computer wins!"), PrintPossibleSolution, ReinitializeGame ]
       pure state
     else if isAlreadyPlayed then do
       tell [ Log (colorError "Word already played. Try again."), Log (showPath state), AskUserToPlay ]
@@ -142,6 +143,13 @@ handleEffect state ReinitializeGame = do
   log $ "New game..."
   _ <- delay (Milliseconds (toNumber 1000))
   pure $ Tuple (state { currentState = DifficultySet state.wordLength }) []
+handleEffect state PrintPossibleSolution = do
+  let
+    possiblePath = getShortestPath state.dictionary (state.lastPlayedWord) (snd state.gameWords)
+  case possiblePath of
+    Nothing -> log $ "Could not have gone from " <> state.lastPlayedWord <> " to " <> (snd state.gameWords)
+    Just (Tuple _ path) -> log $ "Possible solution: " <> (joinWith " → " path)
+  pure $ Tuple state []
 
 handleEffects :: GameState -> Array GameEffect -> Aff GameState
 handleEffects initialState initialEffects =
@@ -304,6 +312,7 @@ instance showGameEffect :: Show GameEffect where
   show AskUserToPlay = "AskUserToPlay"
   show AskComputerToPlay = "AskComputerToPlay"
   show ReinitializeGame = "ReinitializeGame"
+  show PrintPossibleSolution = "PrintPossibleSolution"
 
 derive instance Eq CurrentState
 derive instance Eq GameEffect
