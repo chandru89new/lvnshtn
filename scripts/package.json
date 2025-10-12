@@ -1,6 +1,6 @@
 {
   "name": "wordladder",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "devDependencies": {
     "esbuild": "0.25.10"
   },

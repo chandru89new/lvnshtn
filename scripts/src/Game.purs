@@ -145,7 +145,8 @@ handleEffect state ReinitializeGame = do
   pure $ Tuple (state { currentState = DifficultySet state.wordLength }) []
 handleEffect state PrintPossibleSolution = do
   let
-    possiblePath = getShortestPath state.dictionary (state.lastPlayedWord) (snd state.gameWords)
+    playedWords = state.playedPath
+    possiblePath = getShortestPath (Set.filter (\w -> not $ elem w playedWords) state.dictionary) (state.lastPlayedWord) (snd state.gameWords)
   case possiblePath of
     Nothing -> log $ "Could not have gone from " <> state.lastPlayedWord <> " to " <> (snd state.gameWords)
     Just (Tuple _ path) -> log $ "Possible solution: " <> (joinWith " → " path)
