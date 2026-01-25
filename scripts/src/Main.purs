@@ -22,6 +22,7 @@ main = do
       , gameWords: Tuple "" ""
       , currentState: NotInitialized
       , wordLength: 0
+      , tries: 0
       }
   launchAff_ $ do
     let

@@ -49,6 +49,7 @@ type GameState =
   , playedPath :: Array String
   , gameWords :: Tuple String String
   , currentState :: CurrentState
+  , tries :: Int
   }
 
 -- FUNCTIONS
@@ -60,7 +61,7 @@ updateGameState state = case state.currentState of
 
   DifficultySet int -> do
     tell [ InitializeGame ]
-    pure (state { dictionary = dict, wordLength = int })
+    pure (state { dictionary = dict, wordLength = int, tries = 0 })
     where
     dict = getAllWordsByLen int
 
@@ -69,19 +70,31 @@ updateGameState state = case state.currentState of
       tell [ Log (colorError "You forfeited! Computer wins!"), PrintPossibleSolution, ReinitializeGame ]
       pure state
     else if isAlreadyPlayed then do
-      tell [ Log (colorError "Word already played. Try again."), Log (showPath state), AskUserToPlay ]
-      pure state
+      if state.tries == 2 then do
+        tell [ Log (colorError "Out of tries. Computer wins!"), PrintPossibleSolution, ReinitializeGame]
+        pure state
+      else do
+        tell [ Log (colorError $ appendRetriesRemaing state.tries "Word already played. Try again."), Log (showPath state), AskUserToPlay ]
+        pure $ state { tries = state.tries + 1 }
     else if not isValidEnglishWord then do
-      tell [ Log (colorError "Word not in dictionary. Try again."), Log (showPath state), AskUserToPlay ]
-      pure state
+      if state.tries == 2 then do
+          tell [ Log (colorError "Out of tries. Computer wins!"), PrintPossibleSolution, ReinitializeGame]
+          pure state
+      else do
+        tell [ Log (colorError $ appendRetriesRemaing state.tries "Word not in dictionary. Try again."), Log (showPath state), AskUserToPlay ]
+        pure $ state { tries = state.tries + 1 }
     else if not isInAllowed then do
-      tell [ Log (colorError "Word must differ by exactly one letter. Try again."), Log (showPath state), AskUserToPlay ]
-      pure state
+      if state.tries == 2 then do
+          tell [ Log (colorError "Out of tries. Computer wins!"), PrintPossibleSolution, ReinitializeGame]
+          pure state
+      else do
+        tell [ Log (colorError $ appendRetriesRemaing state.tries "Word must differ by exactly one letter. Try again."), Log (showPath state), AskUserToPlay ]
+        pure (state { tries = state.tries + 1 })
     else if hasWon then do
       tell [ Log (colorSuccess "You win!"), ReinitializeGame ]
-      pure state
+      pure (state { tries = 0 })
     else do
-      let newState = state { lastPlayedWord = word, playedPath = newPath }
+      let newState = state { lastPlayedWord = word, playedPath = newPath, tries = 0 }
       tell [ Log (showPath newState), Log "Thinking...", AskComputerToPlay ]
       pure newState
     where
@@ -119,7 +132,7 @@ handleEffect state InitializeGame = do
   wrds <- getRandomPlayableWord dict
   let
     newPath = [ fst wrds ]
-    newState = (state { lastPlayedWord = fst wrds, gameWords = wrds, playedPath = newPath })
+    newState = (state { lastPlayedWord = fst wrds, gameWords = wrds, playedPath = newPath, tries = 0 })
   pure $ Tuple newState [ Log $ showPath newState, AskUserToPlay ]
 handleEffect state AskUserToPlay = do
   input <- readLine $ colorUser "You (or hit Enter to forfeit)"
@@ -142,7 +155,7 @@ handleEffect state AskComputerToPlay = do
 handleEffect state ReinitializeGame = do
   log $ "New game..."
   _ <- delay (Milliseconds (toNumber 1000))
-  pure $ Tuple (state { currentState = DifficultySet state.wordLength }) []
+  pure $ Tuple (state { currentState = DifficultySet state.wordLength, tries = 0 }) []
 handleEffect state PrintPossibleSolution = do
   let
     playedWords = state.playedPath
@@ -285,6 +298,10 @@ colorInfo = colorLog Blue
 
 colorUser :: String -> String
 colorUser = colorLog Blue
+
+appendRetriesRemaing :: Int -> String -> String
+appendRetriesRemaing tries msg =
+  msg <> " (Retries left: " <> show (2 - tries) <> ")"
 
 -- CONSTANTS
 
