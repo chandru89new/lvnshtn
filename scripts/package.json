@@ -1,6 +1,6 @@
 {
   "name": "wordladder",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "devDependencies": {
     "esbuild": "0.25.10",
     "purescript": "^0.15.15",
