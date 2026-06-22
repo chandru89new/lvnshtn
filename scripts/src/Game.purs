@@ -33,6 +33,8 @@ data GameEffect
   | AskComputerToPlay
   | ReinitializeGame
   | PrintPossibleSolution
+  | ScoreComputer
+  | ScoreUser
 
 data CurrentState
   = NotInitialized
@@ -50,6 +52,7 @@ type GameState =
   , gameWords :: Tuple String String
   , currentState :: CurrentState
   , tries :: Int
+  , score :: Tuple Int Int
   }
 
 -- FUNCTIONS
@@ -67,31 +70,31 @@ updateGameState state = case state.currentState of
 
   UserPlayed word ->
     if trim word == "" then do
-      tell [ Log (colorError "You forfeited! Computer wins!"), PrintPossibleSolution, ReinitializeGame ]
+      tell [ Log (colorError "You forfeited! Computer wins!"), ScoreComputer, PrintPossibleSolution, ReinitializeGame ]
       pure state
     else if isAlreadyPlayed then do
       if state.tries == 2 then do
-        tell [ Log (colorError "Out of tries. Computer wins!"), PrintPossibleSolution, ReinitializeGame]
+        tell [ Log (colorError "Out of tries. Computer wins!"), ScoreComputer, PrintPossibleSolution, ReinitializeGame]
         pure state
       else do
         tell [ Log (colorError $ appendRetriesRemaing state.tries "Word already played. Try again."), Log (showPath state), AskUserToPlay ]
         pure $ state { tries = state.tries + 1 }
     else if not isValidEnglishWord then do
       if state.tries == 2 then do
-          tell [ Log (colorError "Out of tries. Computer wins!"), PrintPossibleSolution, ReinitializeGame]
+          tell [ Log (colorError "Out of tries. Computer wins!"), ScoreComputer, PrintPossibleSolution, ReinitializeGame]
           pure state
       else do
         tell [ Log (colorError $ appendRetriesRemaing state.tries "Word not in dictionary. Try again."), Log (showPath state), AskUserToPlay ]
         pure $ state { tries = state.tries + 1 }
     else if not isInAllowed then do
       if state.tries == 2 then do
-          tell [ Log (colorError "Out of tries. Computer wins!"), PrintPossibleSolution, ReinitializeGame]
+          tell [ Log (colorError "Out of tries. Computer wins!"), ScoreComputer, PrintPossibleSolution, ReinitializeGame]
           pure state
       else do
         tell [ Log (colorError $ appendRetriesRemaing state.tries "Word must differ by exactly one letter. Try again."), Log (showPath state), AskUserToPlay ]
         pure (state { tries = state.tries + 1 })
     else if hasWon then do
-      tell [ Log (colorSuccess "You win!"), ReinitializeGame ]
+      tell [ Log (colorSuccess "You win!"), ScoreUser, ReinitializeGame ]
       pure (state { tries = 0 })
     else do
       let newState = state { lastPlayedWord = word, playedPath = newPath, tries = 0 }
@@ -106,7 +109,7 @@ updateGameState state = case state.currentState of
 
   ComputerPlayed word ->
     if hasWon then do
-      tell [ Log (colorWarning $ "Computer plays '" <> word <> "' and wins!"), ReinitializeGame ]
+      tell [ Log (colorWarning $ "Computer plays '" <> word <> "' and wins!"), ScoreComputer, ReinitializeGame ]
       pure state
     else do
       let newState = state { lastPlayedWord = word, playedPath = newPath }
@@ -150,10 +153,11 @@ handleEffect state AskComputerToPlay = do
           | otherwise -> Just w
         Nothing -> A.head allowed
   case nextBestWord of
-    Nothing -> pure $ Tuple state [ Log "Computer can't think of any word!", Log (colorSuccess "You win!"), ReinitializeGame ]
+    Nothing -> pure $ Tuple state [ Log "Computer can't think of any word!", Log (colorSuccess "You win!"), ScoreUser, ReinitializeGame ]
     Just word -> pure $ Tuple (state { currentState = ComputerPlayed word }) []
 handleEffect state ReinitializeGame = do
   log $ "New game..."
+  log $ "Current score: " <> "Computer (" <> show (fst state.score) <> ") vs. You (" <> show (snd state.score) <> ")"
   _ <- delay (Milliseconds (toNumber 1000))
   pure $ Tuple (state { currentState = DifficultySet state.wordLength, tries = 0 }) []
 handleEffect state PrintPossibleSolution = do
@@ -164,6 +168,10 @@ handleEffect state PrintPossibleSolution = do
     Nothing -> log $ "Could not have gone from " <> state.lastPlayedWord <> " to " <> (snd state.gameWords)
     Just (Tuple _ path) -> log $ "Possible solution: " <> (joinWith " → " path)
   pure $ Tuple state []
+handleEffect state ScoreComputer = do
+  pure $ Tuple (state { score = Tuple (fst state.score + 1) (snd state.score)}) []
+handleEffect state ScoreUser = do
+  pure $ Tuple (state { score = Tuple (fst state.score) (snd state.score + 1)}) []
 
 handleEffects :: GameState -> Array GameEffect -> Aff GameState
 handleEffects initialState initialEffects =
@@ -331,6 +339,8 @@ instance showGameEffect :: Show GameEffect where
   show AskComputerToPlay = "AskComputerToPlay"
   show ReinitializeGame = "ReinitializeGame"
   show PrintPossibleSolution = "PrintPossibleSolution"
+  show ScoreComputer = "ScoreComputer"
+  show ScoreUser = "ScoreUser"
 
 derive instance Eq CurrentState
 derive instance Eq GameEffect

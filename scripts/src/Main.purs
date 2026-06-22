@@ -22,7 +22,7 @@ main = do
   args <- do
     a <- argv
     pure $ slice 2 (Array.length a) a
-  wrd1 <- pure $ Array.index args 0 
+  wrd1 <- pure $ Array.index args 0
   wrd2 <- pure $ Array.index args 1
   case [wrd1, wrd2] of
     [Nothing, Nothing] -> do
@@ -36,6 +36,7 @@ main = do
           , currentState: NotInitialized
           , wordLength: 0
           , tries: 0
+          , score: Tuple 0 0
           }
       launchAff_ $ do
         let
@@ -48,15 +49,15 @@ main = do
       let res = getShortestPath' w1 w2
       log $ case res of
             Left err -> colorError err
-            Right path -> 
-              if (Array.length path == 0) 
+            Right path ->
+              if (Array.length path == 0)
                 then colorError "I couldn't find a way to go from " <> w1 <> colorError " to " <> w2 <> "."
-                else colorSuccess $ joinWith " → " path  
+                else colorSuccess $ joinWith " → " path
       exit' (if isLeft res then 1 else 0)
     _ -> do
       log "I don't recognize that extra command/parameter. To play the game, just `npx wordladder` or `node <path-to-wordladder-file>."
       exit' 1
-    
+
 
 getShortestPath' :: String -> String -> Either String (Array String)
 getShortestPath' w1 w2 = do
@@ -64,7 +65,7 @@ getShortestPath' w1 w2 = do
   else if (length w1 /= length w2) then (Left "Start and end word should be of the same length.")
   else if (not (isValidWord dict w1 && isValidWord dict w2)) then (Left "Hmm, one of those words is not in my dictionary. Typo?")
   else do
-    Right 
+    Right
     $ case (getShortestPath dict w1 w2) of
         Nothing -> []
         Just (Tuple _ p) -> p
